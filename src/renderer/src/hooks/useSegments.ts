@@ -3,18 +3,19 @@ import { useStateWithHistory } from 'react-use/lib/useStateWithHistory';
 import i18n from 'i18next';
 import pMap from 'p-map';
 import invariant from 'tiny-invariant';
-
 import sortBy from 'lodash/sortBy';
 
 import { detectSceneChanges as ffmpegDetectSceneChanges, readFrames, mapTimesToSegments, findKeyframeNearTime } from '../ffmpeg';
 import { handleError, shuffleArray } from '../util';
 import { errorToast } from '../swal';
 import { showParametersDialog } from '../dialogs/parameters';
-import { createNumSegments as createNumSegmentsDialog, createFixedDurationSegments as createFixedDurationSegmentsDialog, createRandomSegments as createRandomSegmentsDialog, labelSegmentDialog, askForShiftSegments, askForAlignSegments, selectSegmentsByLabelDialog, selectSegmentsByTagDialog } from '../dialogs';
-import { createSegment, findSegmentsAtCursor, sortSegments, invertSegments, getSegmentTags, combineOverlappingSegments as combineOverlappingSegments2, combineSelectedSegments as combineSelectedSegments2, isDurationValid, getSegApparentStart, getSegApparentEnd as getSegApparentEnd2, addSegmentColorIndex } from '../segments';
+import { createNumSegments as createNumSegmentsDialog, createFixedDurationSegments as createFixedDurationSegmentsDialog, createRandomSegments as createRandomSegmentsDialog, labelSegmentDialog, askForShiftSegments, askForAlignSegments, selectSegmentsByLabelDialog, selectSegmentsByExprDialog } from '../dialogs';
+import { createSegment, findSegmentsAtCursor, sortSegments, invertSegments, combineOverlappingSegments as combineOverlappingSegments2, combineSelectedSegments as combineSelectedSegments2, isDurationValid, getSegApparentStart, getSegApparentEnd as getSegApparentEnd2, addSegmentColorIndex } from '../segments';
 import * as ffmpegParameters from '../ffmpeg-parameters';
 import { maxSegmentsAllowed } from '../util/constants';
 import { ParseTimecode, SegmentBase, SegmentToExport, StateSegment, UpdateSegAtIndex } from '../types';
+import safeishEval from '../worker/eval';
+import { ScopeSegment } from '../../../../types';
 
 const { ffmpeg: { blackDetect, silenceDetect } } = window.require('@electron/remote').require('./index.js');
 
@@ -229,7 +230,7 @@ function useSegments({ filePath, workingRef, setWorking, setCutProgress, videoSt
     setCutSegments(cutSegmentsNew);
   }, [setCutSegments, cutSegments]);
 
-  const setCutTime = useCallback((type, time) => {
+  const setCutTime = useCallback((type: 'start' | 'end', time: number) => {
     if (!isDurationValid(duration)) return;
 
     const currentSeg = currentCutSeg;
@@ -412,6 +413,13 @@ function useSegments({ filePath, workingRef, setWorking, setCutProgress, videoSt
     if (value != null) updateSegAtIndex(index, { name: value });
   }, [cutSegments, updateSegAtIndex, maxLabelLength]);
 
+  const focusSegmentAtCursor = useCallback(() => {
+    const relevantTime = getRelevantTime();
+    const [firstSegmentAtCursorIndex] = findSegmentsAtCursor(apparentCutSegments, relevantTime);
+    if (firstSegmentAtCursorIndex == null) return;
+    setCurrentSegIndex(firstSegmentAtCursorIndex);
+  }, [apparentCutSegments, getRelevantTime]);
+
   const splitCurrentSegment = useCallback(() => {
     const relevantTime = getRelevantTime();
     const segmentsAtCursorIndexes = findSegmentsAtCursor(apparentCutSegments, relevantTime);
@@ -454,7 +462,7 @@ function useSegments({ filePath, workingRef, setWorking, setCutProgress, videoSt
     if (segments) loadCutSegments(segments);
   }, [checkFileOpened, duration, loadCutSegments]);
 
-  const enableSegments = useCallback((segmentsToEnable) => {
+  const enableSegments = useCallback((segmentsToEnable: { segId: string }[]) => {
     if (segmentsToEnable.length === 0 || segmentsToEnable.length === cutSegments.length) return; // no point
     setDeselectedSegmentIds((existing) => {
       const ret = { ...existing };
@@ -471,13 +479,37 @@ function useSegments({ filePath, workingRef, setWorking, setCutProgress, videoSt
     enableSegments(segmentsToEnable);
   }, [currentCutSeg, cutSegments, enableSegments]);
 
-  const onSelectSegmentsByTag = useCallback(async () => {
-    const value = await selectSegmentsByTagDialog();
+  const onSelectSegmentsByExpr = useCallback(async () => {
+    async function matchSegment(seg: StateSegment, expr: string) {
+      const start = getSegApparentStart(seg);
+      const end = getSegApparentEnd(seg);
+      // must clone tags because scope is mutable (editable by expression)
+      const scopeSegment: ScopeSegment = { label: seg.name, start, end, duration: end - start, tags: { ...seg.tags } };
+      return (await safeishEval(expr, { segment: scopeSegment })) === true;
+    }
+
+    const getSegmentsToEnable = async (expr: string) => (await pMap(cutSegments, async (seg) => (
+      ((await matchSegment(seg, expr)) ? [seg] : [])
+    ), { concurrency: 5 })).flat();
+
+    const value = await selectSegmentsByExprDialog(async (v: string) => {
+      try {
+        if (v.trim().length === 0) return i18n.t('Please enter a JavaScript expression.');
+        const segments = await getSegmentsToEnable(v);
+        if (segments.length === 0) return i18n.t('No segments match this expression.');
+        return undefined;
+      } catch (err) {
+        if (err instanceof Error) {
+          return i18n.t('Expression failed: {{errorMessage}}', { errorMessage: err.message });
+        }
+        throw err;
+      }
+    });
+
     if (value == null) return;
-    const { tagName, tagValue } = value;
-    const segmentsToEnable = cutSegments.filter((seg) => getSegmentTags(seg)[tagName] === tagValue);
+    const segmentsToEnable = await getSegmentsToEnable(value);
     enableSegments(segmentsToEnable);
-  }, [cutSegments, enableSegments]);
+  }, [cutSegments, enableSegments, getSegApparentEnd]);
 
   const onLabelSelectedSegments = useCallback(async () => {
     if (selectedSegmentsRaw.length === 0) return;
@@ -541,6 +573,7 @@ function useSegments({ filePath, workingRef, setWorking, setCutProgress, videoSt
     setCutEnd,
     onLabelSegment,
     splitCurrentSegment,
+    focusSegmentAtCursor,
     createNumSegments,
     createFixedDurationSegments,
     createRandomSegments,
@@ -570,7 +603,7 @@ function useSegments({ filePath, workingRef, setWorking, setCutProgress, videoSt
     invertSelectedSegments,
     removeSelectedSegments,
     onSelectSegmentsByLabel,
-    onSelectSegmentsByTag,
+    onSelectSegmentsByExpr,
     toggleSegmentSelected,
     selectOnlySegment,
     setCutTime,

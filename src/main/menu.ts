@@ -15,6 +15,7 @@ const { Menu } = electron;
 export default ({ app, mainWindow, newVersion, isStoreBuild }: {
   app: Electron.App, mainWindow: BrowserWindow, newVersion?: string | undefined, isStoreBuild: boolean,
 }) => {
+  // todo TS mainWindow.webContents.send
   const menu: (MenuItemConstructorOptions | MenuItem)[] = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
 
@@ -26,6 +27,12 @@ export default ({ app, mainWindow, newVersion, isStoreBuild }: {
           accelerator: 'CmdOrCtrl+O',
           async click() {
             mainWindow.webContents.send('openFilesDialog');
+          },
+        },
+        {
+          label: esc(t('Open folder')),
+          async click() {
+            mainWindow.webContents.send('openDirDialog');
           },
         },
         {

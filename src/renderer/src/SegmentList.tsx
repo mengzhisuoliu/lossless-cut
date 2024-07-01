@@ -26,6 +26,7 @@ const buttonBaseStyle = {
 
 const neutralButtonColor = 'var(--gray8)';
 
+// eslint-disable-next-line react/display-name
 const Segment = memo(({
   seg,
   index,
@@ -44,7 +45,7 @@ const Segment = memo(({
   onToggleSegmentSelected,
   onDeselectAllSegments,
   onSelectSegmentsByLabel,
-  onSelectSegmentsByTag,
+  onSelectSegmentsByExpr,
   onSelectAllSegments,
   jumpSegStart,
   jumpSegEnd,
@@ -71,7 +72,7 @@ const Segment = memo(({
   onToggleSegmentSelected: UseSegments['toggleSegmentSelected'],
   onDeselectAllSegments: UseSegments['deselectAllSegments'],
   onSelectSegmentsByLabel: UseSegments['onSelectSegmentsByLabel'],
-  onSelectSegmentsByTag: UseSegments['onSelectSegmentsByTag'],
+  onSelectSegmentsByExpr: UseSegments['onSelectSegmentsByExpr'],
   onSelectAllSegments: UseSegments['selectAllSegments'],
   jumpSegStart: (i: number) => void,
   jumpSegEnd: (i: number) => void,
@@ -109,7 +110,7 @@ const Segment = memo(({
       { label: t('Select all segments'), click: () => onSelectAllSegments() },
       { label: t('Deselect all segments'), click: () => onDeselectAllSegments() },
       { label: t('Select segments by label'), click: () => onSelectSegmentsByLabel() },
-      { label: t('Select segments by tag'), click: () => onSelectSegmentsByTag() },
+      { label: t('Select segments by expression'), click: () => onSelectSegmentsByExpr() },
       { label: t('Invert selected segments'), click: () => onInvertSelectedSegments() },
 
       { type: 'separator' },
@@ -128,7 +129,7 @@ const Segment = memo(({
       { label: t('Segment tags'), click: () => onEditSegmentTags(index) },
       { label: t('Extract frames as image files'), click: () => onExtractSegmentFramesAsImages([seg.segId]) },
     ];
-  }, [invertCutSegments, t, addSegment, onLabelSelectedSegments, onRemoveSelected, updateSegOrder, index, jumpSegStart, jumpSegEnd, onLabelPress, onRemovePress, onDuplicateSegmentClick, seg, onSelectSingleSegment, onSelectAllSegments, onDeselectAllSegments, onSelectSegmentsByLabel, onSelectSegmentsByTag, onInvertSelectedSegments, onReorderPress, onEditSegmentTags, onExtractSegmentFramesAsImages]);
+  }, [invertCutSegments, t, addSegment, onLabelSelectedSegments, onRemoveSelected, updateSegOrder, index, jumpSegStart, jumpSegEnd, onLabelPress, onRemovePress, onDuplicateSegmentClick, seg, onSelectSingleSegment, onSelectAllSegments, onDeselectAllSegments, onSelectSegmentsByLabel, onSelectSegmentsByExpr, onInvertSelectedSegments, onReorderPress, onEditSegmentTags, onExtractSegmentFramesAsImages]);
 
   useContextMenu(ref, contextMenuTemplate);
 
@@ -218,7 +219,7 @@ const Segment = memo(({
   );
 });
 
-const SegmentList = memo(({
+function SegmentList({
   width,
   formatTimecode,
   apparentCutSegments,
@@ -243,7 +244,7 @@ const SegmentList = memo(({
   onDeselectAllSegments,
   onSelectAllSegments,
   onSelectSegmentsByLabel,
-  onSelectSegmentsByTag,
+  onSelectSegmentsByExpr,
   onExtractSegmentFramesAsImages,
   onLabelSelectedSegments,
   onInvertSelectedSegments,
@@ -281,7 +282,7 @@ const SegmentList = memo(({
   onDeselectAllSegments: UseSegments['deselectAllSegments'],
   onSelectAllSegments: UseSegments['selectAllSegments'],
   onSelectSegmentsByLabel: UseSegments['onSelectSegmentsByLabel'],
-  onSelectSegmentsByTag: UseSegments['onSelectSegmentsByTag'],
+  onSelectSegmentsByExpr: UseSegments['onSelectSegmentsByExpr'],
   onExtractSegmentFramesAsImages: (segIds: string[]) => Promise<void>,
   onLabelSelectedSegments: UseSegments['onLabelSelectedSegments'],
   onInvertSelectedSegments: UseSegments['invertSelectedSegments'],
@@ -294,7 +295,7 @@ const SegmentList = memo(({
   setEditingSegmentTags: Dispatch<SetStateAction<SegmentTags | undefined>>,
   setEditingSegmentTagsSegmentIndex: Dispatch<SetStateAction<number | undefined>>,
   onEditSegmentTags: (index: number) => void,
-}) => {
+}) {
   const { t } = useTranslation();
   const { getSegColor } = useSegColors();
 
@@ -487,7 +488,7 @@ const SegmentList = memo(({
                   onSelectAllSegments={onSelectAllSegments}
                   onEditSegmentTags={onEditSegmentTags}
                   onSelectSegmentsByLabel={onSelectSegmentsByLabel}
-                  onSelectSegmentsByTag={onSelectSegmentsByTag}
+                  onSelectSegmentsByExpr={onSelectSegmentsByExpr}
                   onExtractSegmentFramesAsImages={onExtractSegmentFramesAsImages}
                   onLabelSelectedSegments={onLabelSelectedSegments}
                   onInvertSelectedSegments={onInvertSelectedSegments}
@@ -502,6 +503,6 @@ const SegmentList = memo(({
       </motion.div>
     </>
   );
-});
+}
 
-export default SegmentList;
+export default memo(SegmentList);

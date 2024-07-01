@@ -1,6 +1,7 @@
 import JSON5 from 'json5';
 import i18n from 'i18next';
 import type { parse as CueParse } from 'cue-parser';
+import invariant from 'tiny-invariant';
 
 import { parseSrt, formatSrt, parseCuesheet, parseXmeml, parseFcpXml, parseCsv, parseCutlist, parsePbf, parseMplayerEdl, formatCsvHuman, formatTsv, formatCsvFrames, formatCsvSeconds, parseCsvTime, getFrameValParser, parseDvAnalyzerSummaryTxt } from './edlFormats';
 import { askForYouTubeInput, showOpenDialog } from './dialogs';
@@ -130,7 +131,7 @@ export async function askForEdlImport({ type, fps }: { type: EdlImportType, fps?
   else if (type === 'srt') filters = [{ name: i18n.t('Subtitles (SRT)'), extensions: ['srt'] }];
   else if (type === 'llc') filters = [{ name: i18n.t('LosslessCut project'), extensions: ['llc'] }];
 
-  const { canceled, filePaths } = await showOpenDialog({ properties: ['openFile'], filters });
+  const { canceled, filePaths } = await showOpenDialog({ properties: ['openFile'], filters, title: i18n.t('Import project') });
   const [firstFilePath] = filePaths;
   if (canceled || firstFilePath == null) return [];
   return readEdlFile({ type, path: firstFilePath, fps });
@@ -139,8 +140,10 @@ export async function askForEdlImport({ type, fps }: { type: EdlImportType, fps?
 export async function exportEdlFile({ type, cutSegments, customOutDir, filePath, getFrameCount }: {
   type: EdlExportType, cutSegments: Segment[], customOutDir?: string | undefined, filePath?: string | undefined, getFrameCount: (a: number) => number | undefined,
 }) {
-  let filters;
-  let ext;
+  invariant(filePath != null);
+
+  let filters: { name: string, extensions: string[] }[] | undefined;
+  let ext: string | undefined;
   // eslint-disable-next-line unicorn/prefer-switch
   if (type === 'csv') {
     ext = 'csv';
@@ -164,7 +167,7 @@ export async function exportEdlFile({ type, cutSegments, customOutDir, filePath,
 
   const defaultPath = getOutPath({ filePath, customOutDir, fileName: `${basename(filePath)}.${ext}` });
 
-  const { canceled, filePath: savePath } = await dialog.showSaveDialog({ defaultPath, filters });
+  const { canceled, filePath: savePath } = await dialog.showSaveDialog({ defaultPath, title: i18n.t('Export project'), ...(filters != null ? { filters } : {}) });
   if (canceled || !savePath) return;
   console.log('Saving', type, savePath);
   // eslint-disable-next-line unicorn/prefer-switch
